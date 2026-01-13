@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getValidAccessToken } from "./spotifyApi.js";
+import { transferPlayback } from "./playback.js";
 
 export const spotifyRouter = Router();
 
@@ -18,4 +19,11 @@ spotifyRouter.get("/token", async (_req, res) => {
   res.json({ ok: true });
 });
 
+});
+spotifyRouter.post("/transfer", async (req, res) => {
+  const device_id = String(req.body?.device_id ?? "");
+  if (!device_id) return res.status(400).json({ error: "Missing device_id" });
+
+  await transferPlayback(device_id);
+  res.json({ ok: true });
 });
