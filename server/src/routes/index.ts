@@ -2,11 +2,15 @@ import { Router } from "express";
 import { authRouter } from "../auth/routes.js";
 import { healthRouter } from "./health.js";
 import { ingestEvent } from "../ingest/eventIngest.js";
+import { spotifyRouter } from "../spotify/routes.js";
+
 
 export const apiRouter = Router();
 
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/", healthRouter);
+apiRouter.use("/spotify", spotifyRouter);
+
 
 apiRouter.post("/events", (req, res) => {
   ingestEvent(req, res).catch((err) => {
