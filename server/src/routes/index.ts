@@ -3,6 +3,8 @@ import { authRouter } from "../auth/routes.js";
 import { healthRouter } from "./health.js";
 import { ingestEvent } from "../ingest/eventIngest.js";
 import { spotifyRouter } from "../spotify/routes.js";
+import { recommendRouter } from "../recommend/routes.js";
+
 
 
 export const apiRouter = Router();
@@ -10,6 +12,8 @@ export const apiRouter = Router();
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/", healthRouter);
 apiRouter.use("/spotify", spotifyRouter);
+apiRouter.use("/recommend", recommendRouter);
+
 
 
 apiRouter.post("/events", (req, res) => {
