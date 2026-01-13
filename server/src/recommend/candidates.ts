@@ -50,3 +50,16 @@ export function getAllFeatureTrackIds(limit = 5000): string[] {
   `).all(limit) as any[];
   return rows.map((r) => r.track_id);
 }
+
+export function getLikedLibraryTrackIds(limit = 5000): string[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT track_id
+    FROM library_tracks
+    WHERE source='liked'
+    ORDER BY added_at DESC
+    LIMIT ?
+  `).all(limit) as any[];
+  return rows.map((r) => r.track_id);
+}
+
