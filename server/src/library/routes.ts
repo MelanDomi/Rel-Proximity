@@ -5,20 +5,25 @@ import { syncLikedSongsToDb } from "../spotify/library.js";
 
 export const libraryRouter = Router();
 
-// Sync liked songs into library_tracks + backfill audio features
 libraryRouter.post("/sync-liked", async (req, res) => {
   const Body = z.object({
-    max_tracks: z.number().int().positive().optional()
+    max_tracks: z.number().int().positive().optional(),
+    max_feature_fetch: z.number().int().positive().optional(),
+    refresh_features_older_than_days: z.number().int().positive().optional()
   });
 
   const parsed = Body.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const out = await syncLikedSongsToDb({ maxTracks: parsed.data.max_tracks });
+  const out = await syncLikedSongsToDb({
+    maxTracks: parsed.data.max_tracks,
+    maxFeatureFetch: parsed.data.max_feature_fetch,
+    refreshFeaturesOlderThanDays: parsed.data.refresh_features_older_than_days
+  });
+
   res.json(out);
 });
 
-// Count tracks in your liked library
 libraryRouter.get("/count", (_req, res) => {
   const db = getDb();
   const row = db.prepare(`
