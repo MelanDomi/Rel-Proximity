@@ -1,6 +1,7 @@
 import { spotifyFetch } from "../spotify/spotifyApi.js";
-import { getAllFeatureTrackIds, getGlobalGoodTracks, getTopTransitionCandidates } from "./candidates.js";
+
 import { finalScore } from "./score.js";
+import { getLikedLibraryTrackIds, getGlobalGoodTracks, getTopTransitionCandidates } from "./candidates.js";
 
 type SpotifyTrack = { id: string; uri: string; name: string };
 
@@ -14,6 +15,15 @@ async function getTrackMeta(trackId: string): Promise<SpotifyTrack | null> {
 }
 
 export async function recommendNext(currentTrackId: string) {
+  const libraryPool = getLikedLibraryTrackIds(5000).filter((id) => id !== currentTrackId);
+
+// Candidate union with de-dupe
+const candidates = Array.from(new Set([
+  ...seenAfter,
+  ...globalGood,
+  ...libraryPool
+])).filter((id) => id !== currentTrackId);
+
   // Build candidate set
   const seenAfter = getTopTransitionCandidates(currentTrackId, 25);
   const globalGood = getGlobalGoodTracks(50);
