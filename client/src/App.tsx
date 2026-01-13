@@ -34,11 +34,18 @@ const [syncing, setSyncing] = useState(false);
     let mounted = true;
 
     createPlayer({
-      onReady: (id) => {
-        if (!mounted) return;
-        setDeviceId(id);
-        tracker.setDeviceId(id);
-      },
+      onReady: async (id) => {
+  setDeviceId(id);
+  tracker.setDeviceId(id);
+
+  await fetch(`${ENV.API_BASE}/spotify/transfer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ device_id: id })
+  });
+}
+,
       onState: (st) => {
         if (!mounted) return;
         setState(st);
