@@ -3,7 +3,7 @@ import { refreshAccessToken } from "../auth/spotifyOAuth.js";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
-async function ensureValidAccessToken(): Promise<string> {
+export async function getValidAccessToken(): Promise<string> {
   const t = getTokens();
   if (!t) throw new Error("Not authenticated");
 
@@ -26,7 +26,7 @@ export async function spotifyFetch<T>(
   method: HttpMethod = "GET",
   body?: unknown
 ): Promise<T> {
-  const access = await ensureValidAccessToken();
+  const access = await getValidAccessToken();
   const url = `https://api.spotify.com/v1${path}`;
 
   const res = await fetch(url, {
@@ -43,8 +43,7 @@ export async function spotifyFetch<T>(
     throw new Error(`Spotify API error ${res.status}: ${text}`);
   }
 
-  // Some endpoints return 204 No Content
   if (res.status === 204) return {} as T;
-
   return res.json() as Promise<T>;
 }
+
