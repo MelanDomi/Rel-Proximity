@@ -1,3 +1,4 @@
+import { syncLiked, libraryCount } from "./api/library";
 import { useEffect, useMemo, useState } from "react";
 import { authStatus, login } from "./api/auth";
 import { createPlayer } from "./spotify/sdk";
@@ -14,6 +15,9 @@ export default function App() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [state, setState] = useState<SpotifyPlayerState | null>(null);
   const [player, setPlayer] = useState<any>(null);
+  const [likedCount, setLikedCount] = useState<number | null>(null);
+const [syncing, setSyncing] = useState(false);
+
 
   const sessionId = useMemo(() => newSessionId(), []);
   const tracker = useMemo(() => new Tracker(sessionId), [sessionId]);
@@ -49,6 +53,12 @@ export default function App() {
         // eslint-disable-next-line no-console
         console.error(err);
       });
+    
+    useEffect(() => {
+  if (!authed) return;
+  libraryCount().then((c) => setLikedCount(c.liked_count)).catch(() => {});
+}, [authed]);
+
     
     useEffect(() => {
   const trackId = state?.track_window?.current_track?.id;
@@ -117,5 +127,23 @@ export default function App() {
         Tip: Start playback by choosing this device in Spotify’s “Connect to a device” menu, or hit play here if it’s active.
       </div>
     </div>
+    <div style={{ padding: 12, display: "flex", gap: 12, alignItems: "center" }}>
+  <button
+    disabled={syncing}
+    onClick={() => {
+      setSyncing(true);
+      syncLiked()
+        .then(() => libraryCount())
+        .then((c) => setLikedCount(c.liked_count))
+        .finally(() => setSyncing(false));
+    }}
+  >
+    {syncing ? "Syncing…" : "Sync Liked Songs"}
+  </button>
+  <div style={{ fontSize: 12, opacity: 0.7 }}>
+    Liked in library: {likedCount ?? "—"}
+  </div>
+</div>
+
   );
 }
