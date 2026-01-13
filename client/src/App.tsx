@@ -6,6 +6,8 @@ import { NowPlayingCard } from "./components/NowPlayingCard";
 import { Controls } from "./components/Controls";
 import { newSessionId } from "./logging/session";
 import { Tracker } from "./logging/tracker";
+import { queueNext } from "./api/recommend";
+
 
 export default function App() {
   const [authed, setAuthed] = useState(false);
@@ -47,6 +49,26 @@ export default function App() {
         // eslint-disable-next-line no-console
         console.error(err);
       });
+    
+    useEffect(() => {
+  const trackId = state?.track_window?.current_track?.id;
+  if (!autoQueue || !trackId) return;
+  if (trackId === lastQueuedFor) return; // only once per track
+  if (!deviceId) return;
+
+  setLastQueuedFor(trackId);
+
+  queueNext(trackId, deviceId)
+    .then((r) => {
+      // eslint-disable-next-line no-console
+      console.log("Queued:", r.queued);
+    })
+    .catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error("Queue failed:", e);
+    });
+}, [state, autoQueue, deviceId, lastQueuedFor]);
+
 
     return () => {
       mounted = false;
