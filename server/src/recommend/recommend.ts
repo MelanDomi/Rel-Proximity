@@ -16,6 +16,9 @@ async function getTrackMeta(trackId: string): Promise<SpotifyTrack | null> {
 
 export async function recommendNext(currentTrackId: string) {
   const libraryPool = getLikedLibraryTrackIds(5000).filter((id) => id !== currentTrackId);
+  const offline = process.env.OFFLINE_MODE === "true";
+const meta = offline ? getLocalMeta(best.candidateTrackId) : await getTrackMeta(best.candidateTrackId);
+
 
 // Candidate union with de-dupe
 const candidates = Array.from(new Set([
