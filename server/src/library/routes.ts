@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { getDb } from "../db/sqlite.js";
 import { syncLikedSongsToDb } from "../spotify/library.js";
+import { syncLikedFromLocalFile } from "./offlineSync.js";
 
 export const libraryRouter = Router();
 
