@@ -28,16 +28,21 @@ export default function App() {
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5174";
   const OFFLINE = import.meta.env.VITE_OFFLINE_MODE === "true";
 
-
-  // 1) Check auth
+  // 1) Check auth (only matters when not offline)
   useEffect(() => {
+    if (OFFLINE) {
+      setAuthed(false);
+      return;
+    }
+
     authStatus()
       .then((s) => setAuthed(s.authed))
       .catch(() => setAuthed(false));
-  }, []);
+  }, [OFFLINE]);
 
-  // 2) When authed, create Spotify Web Playback SDK player
+  // 2) Create Spotify Web Playback SDK player (only when authed AND not offline)
   useEffect(() => {
+    if (OFFLINE) return;
     if (!authed) return;
 
     let mounted = true;
@@ -48,7 +53,7 @@ export default function App() {
         setDeviceId(id);
         tracker.setDeviceId(id);
 
-        // Transfer playback to this Web Playback SDK device (works when Spotify is available)
+        // Transfer playback to this Web Playback SDK device
         try {
           await fetch(`${API_BASE}/spotify/transfer`, {
             method: "POST",
@@ -57,7 +62,6 @@ export default function App() {
             body: JSON.stringify({ device_id: id })
           });
         } catch (e) {
-          // In offline mode or if Spotify routes aren’t available yet, this can fail. That’s fine.
           console.warn("transfer playback failed:", e);
         }
       },
@@ -76,16 +80,22 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [authed, tracker, API_BASE]);
+  }, [OFFLINE, authed, tracker, API_BASE]);
 
-  // 3) Load liked library count (works in offline mode too)
+  // 3) Load liked library count (offline OR online)
   useEffect(() => {
-    if (!authed) return;
-    libraryCount().then((c) => setLikedCount(c.liked_count)).catch(() => {});
-  }, [authed]);
+    // In online mode, only load after authed. In offline mode, load immediately.
+    if (!OFFLINE && !authed) return;
 
-  // 4) Auto-queue next track
+    libraryCount()
+      .then((c) => setLikedCount(c.liked_count))
+      .catch(() => {});
+  }, [OFFLINE, authed]);
+
+  // 4) Auto-queue next track (only online mode)
   useEffect(() => {
+    if (OFFLINE) return;
+
     const trackId = state?.track_window?.current_track?.id;
     if (!autoQueue || !trackId) return;
     if (!deviceId) return;
@@ -96,11 +106,12 @@ export default function App() {
     queueNext(trackId, deviceId)
       .then((r) => console.log("Queued:", r.queued))
       .catch((e) => console.error("Queue failed:", e));
-  }, [state, autoQueue, deviceId, lastQueuedFor]);
+  }, [OFFLINE, state, autoQueue, deviceId, lastQueuedFor]);
 
   const paused = state?.paused ?? true;
 
-  if (!authed) {
+  // If not offline and not authed, show login screen
+  if (!OFFLINE && !authed) {
     return (
       <div style={{ maxWidth: 720, margin: "40px auto", fontFamily: "system-ui" }}>
         <h2>Spotify Next-Track DJ</h2>
@@ -114,35 +125,51 @@ export default function App() {
     );
   }
 
+  // Main UI (offline or online)
   return (
     <div style={{ maxWidth: 720, margin: "40px auto", fontFamily: "system-ui" }}>
       <h2>Spotify Next-Track DJ</h2>
 
-      <div style={{ opacity: 0.7, marginBottom: 12 }}>
-        Device: {deviceId ?? "Connecting…"}
+      <div style={{ opacity: 0.8, marginBottom: 12, fontSize: 12 }}>
+        Mode: <b>{OFFLINE ? "OFFLINE" : "ONLINE"}</b> · API base: {API_BASE}
       </div>
 
-      <NowPlayingCard state={state} />
+      {!OFFLINE && (
+        <>
+          <div style={{ opacity: 0.7, marginBottom: 12 }}>
+            Device: {deviceId ?? "Connecting…"}
+          </div>
 
-      <Controls
-        paused={paused}
-        onPrev={() => {
-          tracker.noteAction("prev");
-          void player?.previousTrack();
-        }}
-        onNext={() => {
-          tracker.noteAction("next");
-          void player?.nextTrack();
-        }}
-        onPlayPause={() => {
-          tracker.noteAction(paused ? "play" : "pause");
-          void player?.togglePlay();
-        }}
-      />
+          <NowPlayingCard state={state} />
 
-      <div style={{ padding: 12, fontSize: 12, opacity: 0.7 }}>
-        Tip: Start playback by choosing this device in Spotify’s “Connect to a device” menu, or hit play here if it’s active.
-      </div>
+          <Controls
+            paused={paused}
+            onPrev={() => {
+              tracker.noteAction("prev");
+              void player?.previousTrack();
+            }}
+            onNext={() => {
+              tracker.noteAction("next");
+              void player?.nextTrack();
+            }}
+            onPlayPause={() => {
+              tracker.noteAction(paused ? "play" : "pause");
+              void player?.togglePlay();
+            }}
+          />
+
+          <div style={{ padding: 12, fontSize: 12, opacity: 0.7 }}>
+            Tip: Start playback by choosing this device in Spotify’s “Connect to a device” menu, or hit play here if it’s active.
+          </div>
+        </>
+      )}
+
+      {OFFLINE && (
+        <div style={{ padding: 12, fontSize: 12, opacity: 0.75 }}>
+          Spotify is unavailable right now (developer apps paused). You can still sync a local liked-songs file and
+          generate training logs/recommendations in offline mode.
+        </div>
+      )}
 
       <div style={{ padding: 12, display: "flex", gap: 12, alignItems: "center" }}>
         <button
@@ -162,15 +189,17 @@ export default function App() {
           Liked in library: {likedCount ?? "—"}
         </div>
 
-        <label style={{ fontSize: 12, opacity: 0.8, marginLeft: "auto" }}>
-          <input
-            type="checkbox"
-            checked={autoQueue}
-            onChange={(e) => setAutoQueue(e.target.checked)}
-            style={{ marginRight: 8 }}
-          />
-          Auto-queue next
-        </label>
+        {!OFFLINE && (
+          <label style={{ fontSize: 12, opacity: 0.8, marginLeft: "auto" }}>
+            <input
+              type="checkbox"
+              checked={autoQueue}
+              onChange={(e) => setAutoQueue(e.target.checked)}
+              style={{ marginRight: 8 }}
+            />
+            Auto-queue next
+          </label>
+        )}
       </div>
     </div>
   );
