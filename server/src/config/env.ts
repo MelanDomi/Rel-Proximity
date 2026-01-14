@@ -1,23 +1,24 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 function req(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env var: ${name}`);
   return v;
 }
 
+function opt(name: string, fallback?: string): string | undefined {
+  return process.env[name] ?? fallback;
+}
+
+const OFFLINE_MODE = process.env.OFFLINE_MODE === "true";
+
 export const ENV = {
-  PORT: Number(process.env.SERVER_PORT ?? "5174"),
+  OFFLINE_MODE,
+  NODE_ENV: opt("NODE_ENV", "development")!,
+  PORT: Number(opt("PORT", "5174")),
+  CLIENT_ORIGIN: opt("CLIENT_ORIGIN", "http://localhost:5173")!,
   SESSION_SECRET: req("SESSION_SECRET"),
 
-  SPOTIFY_CLIENT_ID: req("SPOTIFY_CLIENT_ID"),
-  SPOTIFY_CLIENT_SECRET: req("SPOTIFY_CLIENT_SECRET"),
-  SPOTIFY_REDIRECT_URI: req("SPOTIFY_REDIRECT_URI"),
-
-  // Where sqlite file lives
-  SQLITE_PATH: process.env.SQLITE_PATH ?? "data/app.sqlite",
-
-  // Client origin for CORS
-  CLIENT_ORIGIN: process.env.CLIENT_ORIGIN ?? "http://localhost:5173"
+  // Spotify config is only required when not offline
+  SPOTIFY_CLIENT_ID: OFFLINE_MODE ? "" : req("SPOTIFY_CLIENT_ID"),
+  SPOTIFY_CLIENT_SECRET: OFFLINE_MODE ? "" : req("SPOTIFY_CLIENT_SECRET"),
+  SPOTIFY_REDIRECT_URI: OFFLINE_MODE ? "" : req("SPOTIFY_REDIRECT_URI")
 };
