@@ -1,0 +1,8 @@
+{
+  "tracks": [
+    { "id": "t001", "uri": "local:t001", "name": "Track 001", "artists": ["Artist A"] },
+    { "id": "t002", "uri": "local:t002", "name": "Track 002", "artists": ["Artist A"] },
+    { "id": "t003", "uri": "local:t003", "name": "Track 003", "artists": ["Artist B"] },
+    { "id": "t004", "uri": "local:t004", "name": "Track 004", "artists": ["Artist C"] }
+  ]
+}
