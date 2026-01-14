@@ -11,6 +11,11 @@ libraryRouter.post("/sync-liked", async (req, res) => {
     max_tracks: z.number().int().positive().optional(),
     max_feature_fetch: z.number().int().positive().optional(),
     refresh_features_older_than_days: z.number().int().positive().optional()
+    const offline = process.env.OFFLINE_MODE === "true";
+if (offline) {
+  const out = syncLikedFromLocalFile();
+  return res.json({ ...out, audio_features: { offline: true } });
+}
   });
 
   const parsed = Body.safeParse(req.body ?? {});
