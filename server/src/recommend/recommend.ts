@@ -1,5 +1,5 @@
 import { spotifyFetch } from "../spotify/spotifyApi.js";
-
+import { getDb } from "../db/sqlite.js";
 import { finalScore } from "./score.js";
 import { getLikedLibraryTrackIds, getGlobalGoodTracks, getTopTransitionCandidates } from "./candidates.js";
 
@@ -52,6 +52,18 @@ const candidates = Array.from(new Set([
 
   const meta = await getTrackMeta(best.candidateTrackId);
   if (!meta) return null;
+
+  function getLocalMeta(trackId: string): { id: string; uri: string; name: string } | null {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT track_id as id, uri
+    FROM library_tracks
+    WHERE track_id = ?
+  `).get(trackId) as any;
+
+  if (!row) return null;
+  return { id: row.id, uri: row.uri, name: row.id };
+}
 
   return {
     currentTrackId,
