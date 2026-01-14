@@ -26,6 +26,8 @@ export default function App() {
   const tracker = useMemo(() => new Tracker(sessionId), [sessionId]);
 
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5174";
+  const OFFLINE = import.meta.env.VITE_OFFLINE_MODE === "true";
+
 
   // 1) Check auth
   useEffect(() => {
