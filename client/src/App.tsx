@@ -1,3 +1,4 @@
+import React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { authStatus, login } from "./api/auth";
 import { syncLiked, libraryCount } from "./api/library";
