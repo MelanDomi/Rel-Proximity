@@ -12,6 +12,9 @@ function listMigrationFiles(): string[] {
 
 export function migrate(): void {
   const db = getDb();
+  db.exec("PRAGMA journal_mode = WAL;");
+db.exec("PRAGMA foreign_keys = ON;");
+
   const files = listMigrationFiles();
 
   db.exec(`
