@@ -1,5 +1,4 @@
 import { spotifyFetch } from "../spotify/spotifyApi.js";
-import { getDb } from "../db/sqlite.js";
 import { finalScore } from "./score.js";
 import { getLikedLibraryTrackIds, getGlobalGoodTracks, getTopTransitionCandidates } from "./candidates.js";
 
@@ -15,33 +14,19 @@ async function getTrackMeta(trackId: string): Promise<SpotifyTrack | null> {
 }
 
 export async function recommendNext(currentTrackId: string) {
-  const libraryPool = getLikedLibraryTrackIds(5000).filter((id) => id !== currentTrackId);
-  const offline = process.env.OFFLINE_MODE === "true";
-const meta = offline ? getLocalMeta(best.candidateTrackId) : await getTrackMeta(best.candidateTrackId);
-
-
-// Candidate union with de-dupe
-const candidates = Array.from(new Set([
-  ...seenAfter,
-  ...globalGood,
-  ...libraryPool
-])).filter((id) => id !== currentTrackId);
-
-  // Build candidate set
+  // 1) Candidate sources
   const seenAfter = getTopTransitionCandidates(currentTrackId, 25);
   const globalGood = getGlobalGoodTracks(50);
+  const libraryPool = getLikedLibraryTrackIds(5000).filter((id) => id !== currentTrackId);
 
-  // Similarity pool: all tracks we have features for (cap) minus current
-  const featurePool = getAllFeatureTrackIds(4000).filter((id) => id !== currentTrackId);
+  // 2) Union + de-dupe
+  const candidates = Array.from(
+    new Set<string>([...seenAfter, ...globalGood, ...libraryPool])
+  ).filter((id) => id !== currentTrackId);
 
-  // Candidate union with de-dupe
-  const candidates = Array.from(new Set([
-    ...seenAfter,
-    ...globalGood,
-    ...featurePool.slice(0, 500) // keep compute cheap for now
-  ])).filter((id) => id !== currentTrackId);
+  if (candidates.length === 0) return null;
 
-  // Score all
+  // 3) Score
   const scored = candidates.map((cand) => {
     const s = finalScore({ currentTrackId, candidateTrackId: cand });
     return { candidateTrackId: cand, ...s };
@@ -49,24 +34,13 @@ const candidates = Array.from(new Set([
 
   scored.sort((a, b) => b.total - a.total);
 
-  // Pick best; later you’ll sample from top N for exploration
+  // 4) Pick best (later we’ll add exploration)
   const best = scored[0];
   if (!best) return null;
 
+  // 5) Metadata (Spotify)
   const meta = await getTrackMeta(best.candidateTrackId);
   if (!meta) return null;
-
-  function getLocalMeta(trackId: string): { id: string; uri: string; name: string } | null {
-  const db = getDb();
-  const row = db.prepare(`
-    SELECT track_id as id, uri
-    FROM library_tracks
-    WHERE track_id = ?
-  `).get(trackId) as any;
-
-  if (!row) return null;
-  return { id: row.id, uri: row.uri, name: row.id };
-}
 
   return {
     currentTrackId,
