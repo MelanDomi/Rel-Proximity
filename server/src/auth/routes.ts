@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { makeLoginUrl, randomState, exchangeCodeForTokens, refreshAccessToken } from "./spotifyOAuth.js";
 import { getTokens, upsertTokens } from "./sessionStore.js";
+import { ENV } from "../config/env.js";
 
 export const authRouter = Router();
 
@@ -29,7 +30,7 @@ authRouter.get("/callback", async (req, res) => {
   });
 
   // Send user back to client app
-  res.redirect("http://localhost:5173/");
+  res.redirect(ENV.CLIENT_ORIGIN);
 });
 
 authRouter.get("/status", (_req, res) => {
