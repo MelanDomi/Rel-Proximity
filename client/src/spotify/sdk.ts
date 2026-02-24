@@ -11,6 +11,9 @@ export type PlayerHandle = {
 export async function loadSpotifySDK(): Promise<void> {
   if (document.getElementById("spotify-sdk")) return;
 
+  // Spotify SDK expects this global to exist
+(window as any).onSpotifyWebPlaybackSDKReady = () => {};
+
   await new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
     script.id = "spotify-sdk";
