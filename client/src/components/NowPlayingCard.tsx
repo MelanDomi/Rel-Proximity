@@ -1,3 +1,4 @@
+import React from "react";
 import type { SpotifyPlayerState } from "../spotify/types";
 
 export function NowPlayingCard({ state }: { state: SpotifyPlayerState | null }) {
