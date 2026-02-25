@@ -22,7 +22,8 @@ libraryRouter.post("/sync-liked", async (req, res) => {
       });
     } catch (e: any) {
       return res.status(500).json({
-        error: "Offline sync failed. Make sure server/data/liked_songs.json exists and is valid JSON.",
+        error:
+          "Offline sync failed. Make sure server/data/liked_songs.json exists and is valid JSON.",
         detail: String(e?.message ?? e)
       });
     }
@@ -36,15 +37,24 @@ libraryRouter.post("/sync-liked", async (req, res) => {
   });
 
   const parsed = Body.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
 
-  const out = await syncLikedSongsToDb({
-    maxTracks: parsed.data.max_tracks,
-    maxFeatureFetch: parsed.data.max_feature_fetch,
-    refreshFeaturesOlderThanDays: parsed.data.refresh_features_older_than_days
-  });
+  try {
+    const out = await syncLikedSongsToDb({
+      maxTracks: parsed.data.max_tracks,
+      maxFeatureFetch: parsed.data.max_feature_fetch,
+      refreshFeaturesOlderThanDays: parsed.data.refresh_features_older_than_days
+    });
 
-  return res.json(out);
+    return res.json(out);
+  } catch (e: any) {
+    return res.status(500).json({
+      error: "Spotify sync failed",
+      detail: String(e?.message ?? e)
+    });
+  }
 });
 
 libraryRouter.get("/count", (_req, res) => {
