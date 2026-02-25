@@ -1,24 +1,22 @@
-import "dotenv/config";
-import express from "express";
-import cors from "cors";
-import cookieParser from "cookie-parser";
+import session from "express-session";
+import connectSqlite3 from "connect-sqlite3";
 import { ENV } from "./config/env.js";
-import { apiRouter } from "./routes/index.js";
-import { migrate } from "./db/migrate.js";
 
-migrate();
+const SQLiteStore = connectSqlite3(session);
 
-const app = express();
-app.use(cors({
-  origin: ENV.CLIENT_ORIGIN,
-  credentials: true
-}));
-app.use(cookieParser(ENV.SESSION_SECRET));
-app.use(express.json({ limit: "1mb" }));
-
-app.use(apiRouter);
-
-app.listen(ENV.PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Server listening on http://localhost:${ENV.PORT}`);
-});
+app.use(
+  session({
+    store: new SQLiteStore({
+      db: "sessions.sqlite",
+      dir: "./data"
+    }),
+    secret: ENV.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false // local dev
+    }
+  })
+);
