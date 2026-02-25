@@ -7,7 +7,8 @@ const SCOPES = [
   "user-read-email",
   "user-read-private",
   "user-read-playback-state",
-  "user-modify-playback-state"
+  "user-modify-playback-state",
+  "user-library-read"
 ].join(" ");
 
 export function makeLoginUrl(state: string): string {
@@ -16,7 +17,8 @@ export function makeLoginUrl(state: string): string {
     client_id: ENV.SPOTIFY_CLIENT_ID,
     scope: SCOPES,
     redirect_uri: ENV.SPOTIFY_REDIRECT_URI,
-    state
+    state,
+    show_dialog: "true"
   });
   return `${SPOTIFY_ACCOUNTS}/authorize?${params.toString()}`;
 }
