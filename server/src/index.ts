@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { eventsRouter } from "./events/routes.js";
 
 // Resolve paths relative to this file (server/src/index.ts)
 const __filename = fileURLToPath(import.meta.url);
