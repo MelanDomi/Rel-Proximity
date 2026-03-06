@@ -15,9 +15,16 @@ export async function addToQueue(args: { uri: string; deviceId?: string }) {
  * Transfer playback to a given device (useful for Web Playback SDK).
  * Spotify endpoint: PUT /v1/me/player
  */
+
 export async function transferPlayback(deviceId: string) {
   await spotifyFetch("/me/player", "PUT", {
     device_ids: [deviceId],
-    play: true
+    play: false
+  });
+}
+
+export async function startPlayback(deviceId: string, uri: string) {
+  await spotifyFetch(`/me/player/play?device_id=${encodeURIComponent(deviceId)}`, "PUT", {
+    uris: [uri]
   });
 }
