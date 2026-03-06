@@ -66,6 +66,7 @@ app.use("/auth", authRouter);
 app.use("/library", libraryRouter);
 app.use("/recommend", recommendRouter);
 app.use("/spotify", spotifyRouter);
+app.use("/events", eventsRouter);
 
 app.listen(ENV.PORT, () => {
   console.log(`Server listening on http://localhost:${ENV.PORT}`);
