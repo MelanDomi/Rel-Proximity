@@ -18,6 +18,7 @@ export default function App() {
 
   const [likedCount, setLikedCount] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [startingSeed, setStartingSeed] = useState(false);
 
   const [autoQueue, setAutoQueue] = useState(true);
   const [lastQueuedFor, setLastQueuedFor] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export default function App() {
         tracker.setDeviceId(id);
 
         // Transfer playback to this Web Playback SDK device
+        // play:false on server side should prevent Spotify DJ from auto-resuming
         try {
           await fetch(`${API_BASE}/spotify/transfer`, {
             method: "POST",
@@ -84,7 +86,6 @@ export default function App() {
 
   // 3) Load liked library count (offline OR online)
   useEffect(() => {
-    // In online mode, only load after authed. In offline mode, load immediately.
     if (!OFFLINE && !authed) return;
 
     libraryCount()
@@ -109,6 +110,27 @@ export default function App() {
   }, [OFFLINE, state, autoQueue, deviceId, lastQueuedFor]);
 
   const paused = state?.paused ?? true;
+
+  async function startRelProximity() {
+    if (!deviceId) return;
+
+    setStartingSeed(true);
+    try {
+      const res = await fetch(`${API_BASE}/spotify/start-seed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ device_id: deviceId })
+      });
+
+      const json = await res.json();
+      console.log("Started seed:", json);
+    } catch (e) {
+      console.error("Start seed failed:", e);
+    } finally {
+      setStartingSeed(false);
+    }
+  }
 
   // If not offline and not authed, show login screen
   if (!OFFLINE && !authed) {
@@ -159,7 +181,13 @@ export default function App() {
           />
 
           <div style={{ padding: 12, fontSize: 12, opacity: 0.7 }}>
-            Tip: Start playback by choosing this device in Spotify’s “Connect to a device” menu, or hit play here if it’s active.
+            Tip: Click <b>Start Rel-Proximity</b> to begin from your own library instead of resuming Spotify DJ.
+          </div>
+
+          <div style={{ padding: 12, display: "flex", gap: 12, alignItems: "center" }}>
+            <button disabled={!deviceId || startingSeed} onClick={startRelProximity}>
+              {startingSeed ? "Starting…" : "Start Rel-Proximity"}
+            </button>
           </div>
         </>
       )}
