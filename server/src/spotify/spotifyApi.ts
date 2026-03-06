@@ -21,29 +21,44 @@ export async function getValidAccessToken(): Promise<string> {
   return t.access_token;
 }
 
-export async function spotifyFetch<T>(
+export async function spotifyFetch<T = any>(
   path: string,
-  method: HttpMethod = "GET",
-  body?: unknown
+  method: string,
+  body?: any
 ): Promise<T> {
-  const access = await getValidAccessToken();
-  const url = `https://api.spotify.com/v1${path}`;
+  // ---- keep your existing token logic here ----
+  // example:
+  // const accessToken = await getValidAccessToken(req);
+  // --------------------------------------------
 
-  const res = await fetch(url, {
+  const res = await fetch(`https://api.spotify.com/v1${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${access}`,
-      "Content-Type": "application/json"
+      Authorization: `Bearer ${accessToken}`,
+      ...(body ? { "Content-Type": "application/json" } : {})
     },
     body: body ? JSON.stringify(body) : undefined
   });
 
+  // ✅ Spotify frequently returns 204 for success with no body (queue endpoint!)
+  if (res.status === 204) return undefined as any;
+
+  const text = await res.text();
+
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Spotify API error ${res.status}: ${text}`);
+    // Spotify sometimes returns non-JSON text even on errors
+    throw new Error(`Spotify API ${res.status}: ${text}`);
   }
 
-  if (res.status === 204) return {} as T;
-  return res.json() as Promise<T>;
+  if (!text) return undefined as any;
+
+  // Only parse JSON if it really is JSON
+  const ct = res.headers.get("content-type") ?? "";
+  if (ct.includes("application/json")) {
+    return JSON.parse(text) as T;
+  }
+
+  // otherwise return raw text (rare but safe)
+  return text as any;
 }
 
