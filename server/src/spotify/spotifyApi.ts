@@ -7,29 +7,29 @@ export async function getValidAccessToken(): Promise<string> {
   const t = getTokens();
   if (!t) throw new Error("Not authenticated");
 
-  // refresh 30s early
+  // Refresh a little early
   if (Date.now() > t.expires_at_ts_ms - 30_000) {
     const tokenRes = await refreshAccessToken(t.refresh_token);
     const expiresAt = Date.now() + tokenRes.expires_in * 1000;
+
     upsertTokens({
       access_token: tokenRes.access_token,
       refresh_token: t.refresh_token,
       expires_at_ts_ms: expiresAt
     });
+
     return tokenRes.access_token;
   }
+
   return t.access_token;
 }
 
 export async function spotifyFetch<T = any>(
   path: string,
-  method: string,
-  body?: any
+  method: HttpMethod = "GET",
+  body?: unknown
 ): Promise<T> {
-  // ---- keep your existing token logic here ----
-  // example:
-  // const accessToken = await getValidAccessToken(req);
-  // --------------------------------------------
+  const accessToken = await getValidAccessToken();
 
   const res = await fetch(`https://api.spotify.com/v1${path}`, {
     method,
@@ -40,25 +40,21 @@ export async function spotifyFetch<T = any>(
     body: body ? JSON.stringify(body) : undefined
   });
 
-  // ✅ Spotify frequently returns 204 for success with no body (queue endpoint!)
-  if (res.status === 204) return undefined as any;
+  // Spotify often returns 204 No Content for successful playback actions
+  if (res.status === 204) return undefined as T;
 
   const text = await res.text();
 
   if (!res.ok) {
-    // Spotify sometimes returns non-JSON text even on errors
     throw new Error(`Spotify API ${res.status}: ${text}`);
   }
 
-  if (!text) return undefined as any;
+  if (!text) return undefined as T;
 
-  // Only parse JSON if it really is JSON
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
     return JSON.parse(text) as T;
   }
 
-  // otherwise return raw text (rare but safe)
-  return text as any;
+  return text as T;
 }
-
