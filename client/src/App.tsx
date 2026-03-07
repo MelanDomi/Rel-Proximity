@@ -22,6 +22,7 @@ export default function App() {
 
   const [autoQueue, setAutoQueue] = useState(true);
   const [lastQueuedFor, setLastQueuedFor] = useState<string | null>(null);
+  const [recentTrackIds, setRecentTrackIds] = useState<string[]>([]);
 
   const sessionId = useMemo(() => newSessionId(), []);
   const tracker = useMemo(() => new Tracker(sessionId), [sessionId]);
@@ -93,7 +94,24 @@ export default function App() {
       .catch(() => {});
   }, [OFFLINE, authed]);
 
-  // 4) Auto-queue next track (only online mode)
+  // 4) Track recent songs to avoid immediate loops
+  useEffect(() => {
+    if (OFFLINE) return;
+
+    const trackId = state?.track_window?.current_track?.id;
+    if (!trackId) return;
+
+    setRecentTrackIds((prev) => {
+      // If it’s already the most recent one, do nothing
+      if (prev[prev.length - 1] === trackId) return prev;
+
+      // Keep only the last 5 unique-ish recents in order
+      const next = [...prev.filter((id) => id !== trackId), trackId];
+      return next.slice(-5);
+    });
+  }, [OFFLINE, state?.track_window?.current_track?.id]);
+
+  // 5) Auto-queue next track (only online mode)
   useEffect(() => {
     if (OFFLINE) return;
 
@@ -104,10 +122,10 @@ export default function App() {
 
     setLastQueuedFor(trackId);
 
-    queueNext(trackId, deviceId)
+    queueNext(trackId, deviceId, recentTrackIds)
       .then((r) => console.log("Queued:", r.queued))
       .catch((e) => console.error("Queue failed:", e));
-  }, [OFFLINE, state, autoQueue, deviceId, lastQueuedFor]);
+  }, [OFFLINE, state, autoQueue, deviceId, lastQueuedFor, recentTrackIds]);
 
   const paused = state?.paused ?? true;
 
@@ -188,6 +206,11 @@ export default function App() {
             <button disabled={!deviceId || startingSeed} onClick={startRelProximity}>
               {startingSeed ? "Starting…" : "Start Rel-Proximity"}
             </button>
+          </div>
+
+          <div style={{ padding: 12, fontSize: 12, opacity: 0.65 }}>
+            Recent tracks excluded from immediate re-queue:{" "}
+            {recentTrackIds.length > 0 ? recentTrackIds.join(", ") : "none yet"}
           </div>
         </>
       )}
