@@ -5,6 +5,25 @@ import { spotifyFetch } from "../spotify/spotifyApi.js";
 
 export const recommendRouter = Router();
 
+type SpotifyQueueResponse = {
+  currently_playing?: { id?: string | null } | null;
+  queue?: Array<{ id?: string | null }>;
+};
+
+async function getQueuedTrackIds(): Promise<string[]> {
+  try {
+    const q = await spotifyFetch<SpotifyQueueResponse>("/me/player/queue", "GET");
+    const ids = (q?.queue ?? [])
+      .map((item) => item?.id ?? null)
+      .filter((id): id is string => !!id);
+
+    return ids;
+  } catch {
+    // If queue endpoint fails, just fall back to empty exclusion
+    return [];
+  }
+}
+
 // GET /recommend/next?current=<trackId>&recent_track_ids=id1,id2,id3
 recommendRouter.get("/next", async (req, res) => {
   const current = String(req.query.current ?? "").trim();
@@ -21,7 +40,8 @@ recommendRouter.get("/next", async (req, res) => {
       : [];
 
   try {
-    const rec = await recommendNext(current, recentTrackIds);
+    const queuedTrackIds = await getQueuedTrackIds();
+    const rec = await recommendNext(current, recentTrackIds, queuedTrackIds);
 
     if (!rec) {
       return res.json({ ok: false, error: "No recommendation available yet" });
@@ -57,7 +77,20 @@ recommendRouter.post("/queue-next", async (req, res) => {
   const { current_track_id, device_id, recent_track_ids } = parsed.data;
 
   try {
-    const rec = await recommendNext(current_track_id, recent_track_ids);
+    const queuedTrackIds = await getQueuedTrackIds();
+
+    // Prevent overfilling the Spotify queue.
+    // If there are already 2 or more upcoming tracks, don't add another.
+    if (queuedTrackIds.length >= 2) {
+      return res.json({
+        ok: true,
+        queued: null,
+        skipped: true,
+        reason: "queue already has enough upcoming tracks"
+      });
+    }
+
+    const rec = await recommendNext(current_track_id, recent_track_ids, queuedTrackIds);
 
     if (!rec) {
       return res.json({
