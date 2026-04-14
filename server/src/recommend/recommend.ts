@@ -45,21 +45,30 @@ async function getTrackMeta(trackId: string): Promise<SpotifyTrack | null> {
 
 export async function recommendNext(
   currentTrackId: string,
-  recentTrackIds: string[] = []
+  recentTrackIds: string[] = [],
+  queuedTrackIds: string[] = []
 ) {
-  const excluded = new Set<string>([currentTrackId, ...recentTrackIds]);
+  // Bigger exclusion set:
+  // - current track
+  // - recent tracks from client
+  // - anything already in Spotify queue
+  const excluded = new Set<string>([
+    currentTrackId,
+    ...recentTrackIds,
+    ...queuedTrackIds
+  ]);
 
-  // 1) Candidate sources
-  const seenAfter = getTopTransitionCandidates(currentTrackId, 25);
-  const globalGood = getGlobalGoodTracks(50);
+  // Candidate sources
+  const seenAfter = getTopTransitionCandidates(currentTrackId, 50);
+  const globalGood = getGlobalGoodTracks(100);
   const libraryPool = getLikedLibraryTrackIds(5000);
 
-  // 2) Union + de-dupe + exclude recent/current tracks
+  // Union + de-dupe + exclude
   const candidates = Array.from(
     new Set<string>([...seenAfter, ...globalGood, ...libraryPool])
   ).filter((id) => !excluded.has(id));
 
-  // 3) Cold start fallback: no candidates
+  // Cold start fallback
   if (candidates.length === 0) {
     const fallbackId = randomLikedTrackId(Array.from(excluded));
     if (!fallbackId) return null;
@@ -77,7 +86,7 @@ export async function recommendNext(
     };
   }
 
-  // 4) Score candidates
+  // Score candidates
   const scored = candidates.map((cand) => {
     const s = finalScore({ currentTrackId, candidateTrackId: cand });
     return { candidateTrackId: cand, ...s };
@@ -88,10 +97,9 @@ export async function recommendNext(
   const best = scored[0];
   if (!best) return null;
 
-  // 5) Try metadata for the best candidate
   const meta = await getTrackMeta(best.candidateTrackId);
 
-  // 6) If metadata fails, fallback to a random liked track that isn't excluded
+  // Metadata fallback
   if (!meta) {
     const fallbackId = randomLikedTrackId(Array.from(excluded));
     if (!fallbackId) return null;
@@ -109,7 +117,6 @@ export async function recommendNext(
     };
   }
 
-  // 7) Normal return
   return {
     currentTrackId,
     next: {
