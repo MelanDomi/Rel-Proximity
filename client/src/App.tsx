@@ -122,9 +122,9 @@ export default function App() {
 
     setLastQueuedFor(trackId);
 
-    queueNext(trackId, deviceId, recentTrackIds)
-      .then((r) => console.log("Queued:", r.queued))
-      .catch((e) => console.error("Queue failed:", e));
+queueNext(trackId, deviceId, recentTrackIds)
+  .then((r) => console.log("Queue response:", r))
+  .catch((e) => console.error("Queue failed:", e));
   }, [OFFLINE, state, autoQueue, deviceId, lastQueuedFor, recentTrackIds]);
 
   const paused = state?.paused ?? true;
