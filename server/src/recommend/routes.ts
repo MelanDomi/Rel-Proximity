@@ -19,7 +19,6 @@ async function getQueuedTrackIds(): Promise<string[]> {
 
     return ids;
   } catch {
-    // If queue endpoint fails, just fall back to empty exclusion
     return [];
   }
 }
@@ -78,18 +77,6 @@ recommendRouter.post("/queue-next", async (req, res) => {
 
   try {
     const queuedTrackIds = await getQueuedTrackIds();
-
-    // Prevent overfilling the Spotify queue.
-    // If there are already 2 or more upcoming tracks, don't add another.
-    if (queuedTrackIds.length >= 2) {
-      return res.json({
-        ok: true,
-        queued: null,
-        skipped: true,
-        reason: "queue already has enough upcoming tracks"
-      });
-    }
-
     const rec = await recommendNext(current_track_id, recent_track_ids, queuedTrackIds);
 
     if (!rec) {
