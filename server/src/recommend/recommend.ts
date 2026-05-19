@@ -9,6 +9,20 @@ import { getDb } from "../db/sqlite.js";
 
 type SpotifyTrack = { id: string; uri: string; name: string };
 
+type RecommendOptions = {
+  recentTrackIds?: string[];
+  recentSkippedTrackIds?: string[];
+  queuedTrackIds?: string[];
+};
+
+type ScoredCandidate = {
+  candidateTrackId: string;
+  total: number;
+  markov: number;
+  sim: number;
+  global: number;
+};
+
 function randomLikedTrackId(excludedTrackIds: string[] = []): string | null {
   const db = getDb();
 
@@ -43,18 +57,52 @@ async function getTrackMeta(trackId: string): Promise<SpotifyTrack | null> {
   }
 }
 
+function chooseFromScoreTiers(scored: ScoredCandidate[]): ScoredCandidate | null {
+  if (scored.length === 0) return null;
+
+  // Group nearly-equal scores together so we don't deterministically pick
+  // the first item in library order when many candidates tie at 0.55.
+  const byScore = new Map<string, ScoredCandidate[]>();
+
+  for (const cand of scored) {
+    const key = cand.total.toFixed(4);
+    const bucket = byScore.get(key) ?? [];
+    bucket.push(cand);
+    byScore.set(key, bucket);
+  }
+
+  const scoreKeys = Array.from(byScore.keys()).sort((a, b) => Number(b) - Number(a));
+
+  // Walk score tiers from best downward.
+  // Randomize within the first non-empty tier.
+  for (const key of scoreKeys) {
+    const bucket = byScore.get(key) ?? [];
+    if (bucket.length === 0) continue;
+
+    const idx = Math.floor(Math.random() * bucket.length);
+    return bucket[idx];
+  }
+
+  return null;
+}
+
 export async function recommendNext(
   currentTrackId: string,
-  recentTrackIds: string[] = [],
-  queuedTrackIds: string[] = []
+  options: RecommendOptions = {}
 ) {
-  // Bigger exclusion set:
+  const recentTrackIds = options.recentTrackIds ?? [];
+  const recentSkippedTrackIds = options.recentSkippedTrackIds ?? [];
+  const queuedTrackIds = options.queuedTrackIds ?? [];
+
+  // Strong exclusion set:
   // - current track
-  // - recent tracks from client
+  // - recently played tracks
+  // - recently skipped tracks
   // - anything already in Spotify queue
-  const excluded = new Set<string>([
+  const hardExcluded = new Set<string>([
     currentTrackId,
     ...recentTrackIds,
+    ...recentSkippedTrackIds,
     ...queuedTrackIds
   ]);
 
@@ -63,14 +111,35 @@ export async function recommendNext(
   const globalGood = getGlobalGoodTracks(100);
   const libraryPool = getLikedLibraryTrackIds(5000);
 
-  // Union + de-dupe + exclude
-  const candidates = Array.from(
+  // First pass: strict filtering
+  let candidates = Array.from(
     new Set<string>([...seenAfter, ...globalGood, ...libraryPool])
-  ).filter((id) => !excluded.has(id));
+  ).filter((id) => !hardExcluded.has(id));
 
-  // Cold start fallback
+  // Second pass fallback:
+  // If strict filtering leaves nothing, allow recently played tracks back in,
+  // but still exclude current, skipped, and already queued tracks.
   if (candidates.length === 0) {
-    const fallbackId = randomLikedTrackId(Array.from(excluded));
+    const softerExcluded = new Set<string>([
+      currentTrackId,
+      ...recentSkippedTrackIds,
+      ...queuedTrackIds
+    ]);
+
+    candidates = Array.from(
+      new Set<string>([...seenAfter, ...globalGood, ...libraryPool])
+    ).filter((id) => !softerExcluded.has(id));
+  }
+
+  // Third pass fallback:
+  // If still nothing, pick a random liked track excluding the most important blocks.
+  if (candidates.length === 0) {
+    const fallbackId = randomLikedTrackId([
+      currentTrackId,
+      ...recentSkippedTrackIds,
+      ...queuedTrackIds
+    ]);
+
     if (!fallbackId) return null;
 
     return {
@@ -94,14 +163,18 @@ export async function recommendNext(
 
   scored.sort((a, b) => b.total - a.total);
 
-  const best = scored[0];
+  const best = chooseFromScoreTiers(scored);
   if (!best) return null;
 
   const meta = await getTrackMeta(best.candidateTrackId);
 
-  // Metadata fallback
   if (!meta) {
-    const fallbackId = randomLikedTrackId(Array.from(excluded));
+    const fallbackId = randomLikedTrackId([
+      currentTrackId,
+      ...recentSkippedTrackIds,
+      ...queuedTrackIds
+    ]);
+
     if (!fallbackId) return null;
 
     return {
