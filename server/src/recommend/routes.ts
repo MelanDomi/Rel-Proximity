@@ -10,37 +10,46 @@ type SpotifyQueueResponse = {
   queue?: Array<{ id?: string | null }>;
 };
 
+function parseCsvQuery(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  if (value.trim().length === 0) return [];
+
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 async function getQueuedTrackIds(): Promise<string[]> {
   try {
     const q = await spotifyFetch<SpotifyQueueResponse>("/me/player/queue", "GET");
-    const ids = (q?.queue ?? [])
+
+    return (q?.queue ?? [])
       .map((item) => item?.id ?? null)
       .filter((id): id is string => !!id);
-
-    return ids;
   } catch {
     return [];
   }
 }
 
-// GET /recommend/next?current=<trackId>&recent_track_ids=id1,id2,id3
+// GET /recommend/next?current=<trackId>&recent_track_ids=id1,id2&id&recent_skipped_track_ids=id3,id4
 recommendRouter.get("/next", async (req, res) => {
   const current = String(req.query.current ?? "").trim();
   if (!current) {
     return res.status(400).json({ error: "Missing query param: current" });
   }
 
-  const recentTrackIds =
-    typeof req.query.recent_track_ids === "string" && req.query.recent_track_ids.trim().length > 0
-      ? req.query.recent_track_ids
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+  const recentTrackIds = parseCsvQuery(req.query.recent_track_ids);
+  const recentSkippedTrackIds = parseCsvQuery(req.query.recent_skipped_track_ids);
 
   try {
     const queuedTrackIds = await getQueuedTrackIds();
-    const rec = await recommendNext(current, recentTrackIds, queuedTrackIds);
+
+    const rec = await recommendNext(current, {
+      recentTrackIds,
+      recentSkippedTrackIds,
+      queuedTrackIds
+    });
 
     if (!rec) {
       return res.json({ ok: false, error: "No recommendation available yet" });
@@ -59,13 +68,15 @@ recommendRouter.get("/next", async (req, res) => {
 // body: {
 //   current_track_id: string,
 //   device_id: string,
-//   recent_track_ids?: string[]
+//   recent_track_ids?: string[],
+//   recent_skipped_track_ids?: string[]
 // }
 recommendRouter.post("/queue-next", async (req, res) => {
   const Body = z.object({
     current_track_id: z.string().min(1),
     device_id: z.string().min(1),
-    recent_track_ids: z.array(z.string()).optional().default([])
+    recent_track_ids: z.array(z.string()).optional().default([]),
+    recent_skipped_track_ids: z.array(z.string()).optional().default([])
   });
 
   const parsed = Body.safeParse(req.body ?? {});
@@ -73,11 +84,21 @@ recommendRouter.post("/queue-next", async (req, res) => {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
 
-  const { current_track_id, device_id, recent_track_ids } = parsed.data;
+  const {
+    current_track_id,
+    device_id,
+    recent_track_ids,
+    recent_skipped_track_ids
+  } = parsed.data;
 
   try {
     const queuedTrackIds = await getQueuedTrackIds();
-    const rec = await recommendNext(current_track_id, recent_track_ids, queuedTrackIds);
+
+    const rec = await recommendNext(current_track_id, {
+      recentTrackIds: recent_track_ids,
+      recentSkippedTrackIds: recent_skipped_track_ids,
+      queuedTrackIds
+    });
 
     if (!rec) {
       return res.json({
