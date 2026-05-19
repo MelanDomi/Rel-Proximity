@@ -10,6 +10,9 @@ import { Controls } from "./components/Controls";
 import { newSessionId } from "./logging/session";
 import { Tracker } from "./logging/tracker";
 
+const RECENT_TRACK_WINDOW = 30;
+const SKIPPED_TRACK_WINDOW = 50;
+
 export default function App() {
   const [authed, setAuthed] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
@@ -23,6 +26,7 @@ export default function App() {
   const [autoQueue, setAutoQueue] = useState(true);
   const [lastQueuedFor, setLastQueuedFor] = useState<string | null>(null);
   const [recentTrackIds, setRecentTrackIds] = useState<string[]>([]);
+  const [recentSkippedTrackIds, setRecentSkippedTrackIds] = useState<string[]>([]);
 
   const sessionId = useMemo(() => newSessionId(), []);
   const tracker = useMemo(() => new Tracker(sessionId), [sessionId]);
@@ -30,7 +34,6 @@ export default function App() {
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5174";
   const OFFLINE = import.meta.env.VITE_OFFLINE_MODE === "true";
 
-  // 1) Check auth (only matters when not offline)
   useEffect(() => {
     if (OFFLINE) {
       setAuthed(false);
@@ -42,7 +45,6 @@ export default function App() {
       .catch(() => setAuthed(false));
   }, [OFFLINE]);
 
-  // 2) Create Spotify Web Playback SDK player (only when authed AND not offline)
   useEffect(() => {
     if (OFFLINE) return;
     if (!authed) return;
@@ -55,8 +57,6 @@ export default function App() {
         setDeviceId(id);
         tracker.setDeviceId(id);
 
-        // Transfer playback to this Web Playback SDK device
-        // play:false on server side should prevent Spotify DJ from auto-resuming
         try {
           await fetch(`${API_BASE}/spotify/transfer`, {
             method: "POST",
@@ -85,7 +85,6 @@ export default function App() {
     };
   }, [OFFLINE, authed, tracker, API_BASE]);
 
-  // 3) Load liked library count (offline OR online)
   useEffect(() => {
     if (!OFFLINE && !authed) return;
 
@@ -94,7 +93,6 @@ export default function App() {
       .catch(() => {});
   }, [OFFLINE, authed]);
 
-  // 4) Track recent songs to avoid immediate loops
   useEffect(() => {
     if (OFFLINE) return;
 
@@ -102,16 +100,12 @@ export default function App() {
     if (!trackId) return;
 
     setRecentTrackIds((prev) => {
-      // If it’s already the most recent one, do nothing
       if (prev[prev.length - 1] === trackId) return prev;
-
-      // Keep only the last 5 unique-ish recents in order
       const next = [...prev.filter((id) => id !== trackId), trackId];
-      return next.slice(-5);
+      return next.slice(-RECENT_TRACK_WINDOW);
     });
   }, [OFFLINE, state?.track_window?.current_track?.id]);
 
-  // 5) Auto-queue next track (only online mode)
   useEffect(() => {
     if (OFFLINE) return;
 
@@ -122,12 +116,22 @@ export default function App() {
 
     setLastQueuedFor(trackId);
 
-queueNext(trackId, deviceId, recentTrackIds)
-  .then((r) => console.log("Queue response:", r))
-  .catch((e) => console.error("Queue failed:", e));
-  }, [OFFLINE, state, autoQueue, deviceId, lastQueuedFor, recentTrackIds]);
+    queueNext(trackId, deviceId, recentTrackIds, recentSkippedTrackIds)
+      .then((r) => console.log("Queue response:", r))
+      .catch((e) => console.error("Queue failed:", e));
+  }, [OFFLINE, state, autoQueue, deviceId, lastQueuedFor, recentTrackIds, recentSkippedTrackIds]);
 
   const paused = state?.paused ?? true;
+  const currentTrackId = state?.track_window?.current_track?.id ?? null;
+
+  function markCurrentTrackSkipped() {
+    if (!currentTrackId) return;
+
+    setRecentSkippedTrackIds((prev) => {
+      const next = [...prev.filter((id) => id !== currentTrackId), currentTrackId];
+      return next.slice(-SKIPPED_TRACK_WINDOW);
+    });
+  }
 
   async function startRelProximity() {
     if (!deviceId) return;
@@ -150,7 +154,6 @@ queueNext(trackId, deviceId, recentTrackIds)
     }
   }
 
-  // If not offline and not authed, show login screen
   if (!OFFLINE && !authed) {
     return (
       <div style={{ maxWidth: 720, margin: "40px auto", fontFamily: "system-ui" }}>
@@ -165,7 +168,6 @@ queueNext(trackId, deviceId, recentTrackIds)
     );
   }
 
-  // Main UI (offline or online)
   return (
     <div style={{ maxWidth: 720, margin: "40px auto", fontFamily: "system-ui" }}>
       <h2>Spotify Next-Track DJ</h2>
@@ -190,6 +192,7 @@ queueNext(trackId, deviceId, recentTrackIds)
             }}
             onNext={() => {
               tracker.noteAction("next");
+              markCurrentTrackSkipped();
               void player?.nextTrack();
             }}
             onPlayPause={() => {
@@ -209,16 +212,15 @@ queueNext(trackId, deviceId, recentTrackIds)
           </div>
 
           <div style={{ padding: 12, fontSize: 12, opacity: 0.65 }}>
-            Recent tracks excluded from immediate re-queue:{" "}
-            {recentTrackIds.length > 0 ? recentTrackIds.join(", ") : "none yet"}
+            Recent tracks: {recentTrackIds.length} · Recently skipped: {recentSkippedTrackIds.length}
           </div>
         </>
       )}
 
       {OFFLINE && (
         <div style={{ padding: 12, fontSize: 12, opacity: 0.75 }}>
-          Spotify is unavailable right now (developer apps paused). You can still sync a local liked-songs file and
-          generate training logs/recommendations in offline mode.
+          Spotify is unavailable right now. You can still sync a local liked-songs file and generate training
+          logs/recommendations in offline mode.
         </div>
       )}
 
